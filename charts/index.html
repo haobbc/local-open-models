@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>權重檔大小與模型卡基準</title>
+<style>
+  :root { color-scheme: light; --ink:#1c1915; --muted:#5c564c; --line:#e4dccd; --paper:#f7f4ee; --bar:#8c3d2f; --bar2:#3f5c4b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 "Iowan Old Style", Palatino, "Palatino Linotype", "Songti TC", serif; color:var(--ink); background:var(--paper); }
+  main { max-width:980px; margin:0 auto; padding:28px 18px 80px; }
+  h1 { font-size:1.7rem; line-height:1.25; margin:0 0 8px; }
+  h2 { font-size:1.25rem; margin:2.2rem 0 .4rem; }
+  p, li { color:var(--ink); }
+  .note { color:var(--muted); font-size:.95rem; }
+  a { color:#6e2e24; }
+  .row { display:grid; grid-template-columns:minmax(140px,220px) 1fr auto; gap:8px 10px; align-items:center; margin:4px 0; }
+  .track { background:#efe8dc; height:14px; border-radius:2px; }
+  .fill { background:var(--bar); height:14px; border-radius:2px; }
+  .fill.off { background:var(--bar2); }
+  .val { font-variant-numeric:tabular-nums; font-size:.9rem; white-space:nowrap; }
+  label { display:block; margin:10px 0 4px; font-size:.92rem; }
+  select, input { width:100%; font:inherit; padding:8px 10px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  .meta { font-size:.82rem; color:var(--muted); }
+  .warn { background:#fff6e8; border:1px solid #e6d3a8; padding:10px 12px; }
+  ul.plain { padding-left:1.1rem; }
+  @media (max-width:640px) {
+    .row { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>權重檔大小與模型卡基準</h1>
+  <p class="note">數字來自各模型的 <a href="../models/Qwen3.8-27B.md">models/</a> 頁，也就是官方模型卡與檔案列表。沒有寫的欄位不會在這裡補 0。販商自報的分數不進 README 的 Artificial Analysis 名次。</p>
+
+  <h2>主權重有多大</h2>
+  <p>一根長條是一種包裝。GiB = 檔案列表位元組 ÷ 1024³。橫軸是對數，長條旁的數字才是 GiB。排行榜上的 Q4 粗算與 Day 14 的 GGUF 實測不在這張圖。</p>
+  <div id="weights"></div>
+
+  <h2>Ornith 官方 GGUF，各檔分開</h2>
+  <p>基座 safetensors 已在上一張。這裡每一檔自己一根，不加總，也不把 mmproj 算進權重。</p>
+  <div id="gguf"></div>
+
+  <h2>同一個基準名稱</h2>
+  <p>選一個名稱，只畫有寫出單一數字的模型。沒寫的模型不出現。名稱不同、或同一格裡有兩個數，就不畫在一起。0.72 這種寫法與 70 這種寫法會拆開。</p>
+  <label for="q">篩名稱</label>
+  <input id="q" type="search" placeholder="例如 SWE-bench、HLE、AA-LCR">
+  <label for="bench">基準</label>
+  <select id="bench"></select>
+  <div id="benchwarn"></div>
+  <div id="benchbars"></div>
+  <h3>這一列不是單一數字</h3>
+  <div id="unplot" class="note"></div>
+
+  <h2>名稱在測什麼</h2>
+  <p class="note">說明也寫在 README。這裡可以對到圖上的名稱。</p>
+  <div id="explain"></div>
+</main>
+<script src="data.js"></script>
+<script>
+const data = window.CARD_DATA;
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+function logWidth(value, min, max) {
+  const a = Math.log10(Math.max(value, min));
+  return (a - Math.log10(min)) / (Math.log10(max) - Math.log10(min)) * 100;
+}
+function bars(host, rows, min, max, off) {
+  host.textContent = "";
+  rows.forEach(r => {
+    const row = el("div", "row");
+    const name = el("div");
+    const a = el("a");
+    a.href = "../models/" + (r.slug || "Ornith-1.5-35B-A3B") + ".md";
+    a.textContent = r.title || r.name;
+    name.appendChild(a);
+    if (r.board === false) {
+      const m = el("div", "meta", "不在 AA 名次表");
+      name.appendChild(m);
+    }
+    const track = el("div", "track");
+    const fill = el("div", off ? "fill off" : "fill");
+    fill.style.width = Math.max(1.5, logWidth(r.gib, min, max)) + "%";
+    track.appendChild(fill);
+    row.append(name, track, el("div", "val", r.gib.toFixed(2) + " GiB"));
+    host.appendChild(row);
+  });
+}
+const ws = data.weights.slice().sort((a,b) => b.gib - a.gib);
+bars(document.getElementById("weights"), ws, 10, Math.max(...ws.map(r => r.gib)), false);
+const gs = data.gguf.map(g => ({title: g.name, gib: g.gib, slug: "Ornith-1.5-35B-A3B", board: false}));
+bars(document.getElementById("gguf"), gs, 0.5, Math.max(...gs.map(r => r.gib)), true);
+
+const names = [...new Set(data.plotted.map(p => p.name))].sort((a,b) => a.localeCompare(b, "en"));
+const sel = document.getElementById("bench");
+const q = document.getElementById("q");
+function refill() {
+  const f = q.value.trim().toLowerCase();
+  sel.textContent = "";
+  names.filter(n => !f || n.toLowerCase().includes(f)).forEach(n => {
+    const o = el("option");
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  });
+  draw();
+}
+function draw() {
+  const name = sel.value;
+  const host = document.getElementById("benchbars");
+  const warn = document.getElementById("benchwarn");
+  host.textContent = ""; warn.textContent = "";
+  const rows = data.plotted.filter(p => p.name === name);
+  const buckets = [...new Set(rows.map(r => r.bucket))];
+  if (buckets.length > 1) {
+    const w = el("p", "warn", "這個名稱在不同卡上的寫法尺度不一致（例如 0.72 與百分點）。下面拆開，不放在同一根軸上。");
+    warn.appendChild(w);
+  }
+  buckets.forEach(b => {
+    const subset = rows.filter(r => r.bucket === b);
+    const lower = subset.some(r => r.lower);
+    host.appendChild(el("p", "meta", (b === "unit" ? "卡上寫成 0–1 附近，不跟百分點放在一起" : "同一名稱") + (lower ? "。這一列標了低分較好。" : "。")));
+    const max = Math.max(...subset.map(r => r.value));
+    subset.sort((a,c) => lower ? a.value - c.value : c.value - a.value);
+    subset.forEach(r => {
+      const row = el("div", "row");
+      const nameEl = el("div");
+      const a = el("a");
+      a.href = "../models/" + r.model + ".md";
+      a.textContent = r.title;
+      nameEl.appendChild(a);
+      nameEl.appendChild(el("div", "meta", r.series));
+      const track = el("div", "track");
+      const fill = el("div", "fill");
+      fill.style.width = Math.max(1.5, r.value / max * 100) + "%";
+      if (r.board === false) fill.classList.add("off");
+      track.appendChild(fill);
+      row.append(nameEl, track, el("div", "val", r.raw));
+      host.appendChild(row);
+    });
+  });
+  const extra = data.unplotted.filter(p => p.name === name);
+  const box = document.getElementById("unplot");
+  box.textContent = "";
+  if (!extra.length) {
+    box.textContent = "這個名稱沒有「一格兩個數」的寫法。";
+    return;
+  }
+  extra.forEach(r => {
+    const p = el("p");
+    p.textContent = r.title + "：" + r.raw + "（" + r.series + "）";
+    box.appendChild(p);
+  });
+}
+q.addEventListener("input", refill);
+sel.addEventListener("change", draw);
+refill();
+
+const ex = document.getElementById("explain");
+const groups = new Map();
+data.explanations.forEach(e => {
+  if (!groups.has(e.group)) groups.set(e.group, []);
+  groups.get(e.group).push(e);
+});
+groups.forEach((list, g) => {
+  ex.appendChild(el("h3", null, g));
+  const ul = el("ul", "plain");
+  const seen = new Set();
+  list.forEach(e => {
+    const key = e.text;
+    if (seen.has(e.name)) return;
+    const li = el("li");
+    li.textContent = e.name + " — " + e.text;
+    ul.appendChild(li);
+  });
+  ex.appendChild(ul);
+});
+</script>
+</body>
+</html>
