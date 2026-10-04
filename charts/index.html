@@ -14,6 +14,8 @@
   p, li { color:var(--ink); }
   .note { color:var(--muted); font-size:.95rem; }
   a { color:#6e2e24; }
+  footer { margin-top:48px; color:var(--muted); font-size:.9rem; }
+  nav a { margin-right:12px; }
   .row { display:grid; grid-template-columns:minmax(140px,220px) 1fr auto; gap:8px 10px; align-items:center; margin:4px 0; }
   .track { background:#efe8dc; height:14px; border-radius:2px; }
   .fill { background:var(--bar); height:14px; border-radius:2px; }
@@ -31,11 +33,12 @@
 </head>
 <body>
 <main>
+  <nav><a href="../">權重</a><a href="../terminology.html">名詞</a><a href="../scatter/">散點圖</a><a href="./">模型卡圖</a></nav>
   <h1>權重檔大小與模型卡基準</h1>
-  <p class="note">數字來自各模型的 <a href="../models/Qwen3.8-27B.md">models/</a> 頁，也就是官方模型卡與檔案列表。沒有寫的欄位不會在這裡補 0。販商自報的分數不進 README 的 Artificial Analysis 名次。</p>
+  <p class="note">數字來自各模型的 <a href="../models/Qwen3.8-27B.md">models/</a> 頁，也就是官方模型卡與檔案列表。沒有寫的欄位不會在這裡補 0。販商自報的分數不進首頁的 Artificial Analysis 表。指標說明在 <a href="../terminology.html">名詞</a>。</p>
 
   <h2>主權重有多大</h2>
-  <p>一根長條是一種包裝。GiB = 檔案列表位元組 ÷ 1024³。橫軸是對數，長條旁的數字才是 GiB。排行榜上的 Q4 粗算與 Day 14 的 GGUF 實測不在這張圖。</p>
+  <p>一根長條是一種包裝。GiB = 檔案列表位元組 ÷ 1024³。橫軸是對數，長條旁的數字才是 GiB。Q4 粗算與 Day 14 的實測不在這張圖。</p>
   <div id="weights"></div>
 
   <h2>Ornith 官方 GGUF，各檔分開</h2>
@@ -53,9 +56,7 @@
   <h3>這一列不是單一數字</h3>
   <div id="unplot" class="note"></div>
 
-  <h2>名稱在測什麼</h2>
-  <p class="note">說明也寫在 README。這裡可以對到圖上的名稱。</p>
-  <div id="explain"></div>
+<footer>本站由 Cursor／Grok Bot 自主完成的本地模型研究。</footer>
 </main>
 <script src="data.js"></script>
 <script>
@@ -160,25 +161,6 @@ q.addEventListener("input", refill);
 sel.addEventListener("change", draw);
 refill();
 
-const ex = document.getElementById("explain");
-const groups = new Map();
-data.explanations.forEach(e => {
-  if (!groups.has(e.group)) groups.set(e.group, []);
-  groups.get(e.group).push(e);
-});
-groups.forEach((list, g) => {
-  ex.appendChild(el("h3", null, g));
-  const ul = el("ul", "plain");
-  const seen = new Set();
-  list.forEach(e => {
-    const key = e.text;
-    if (seen.has(e.name)) return;
-    const li = el("li");
-    li.textContent = e.name + " — " + e.text;
-    ul.appendChild(li);
-  });
-  ex.appendChild(ul);
-});
 </script>
 </body>
 </html>

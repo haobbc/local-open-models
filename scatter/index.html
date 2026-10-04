@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型散點圖</title>
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .legend-live { min-height: 2.2rem; }
+  #empty { display: none; }
+  #plot-table td, #plot-table th { white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <nav>
+    <a href="../">權重</a>
+    <a href="../terminology.html">名詞</a>
+    <a href="./">散點圖</a>
+    <a href="../charts/">模型卡圖</a>
+  </nav>
+  <h1>權重與能力</h1>
+  <p class="note">橫軸是倉庫裡已有的大小。縱軸是已有的分數。缺任一邊的模型不畫，也不補 0。</p>
+  <label for="y">能力</label>
+  <select id="y"></select>
+  <label for="x">橫軸</label>
+  <select id="x">
+    <option value="file-vram">主權重檔 · 顯卡 VRAM</option>
+    <option value="file-ram">主權重檔 · 系統 RAM</option>
+    <option value="extra-vram">已記載的量化或粗算 · 顯卡 VRAM</option>
+    <option value="extra-ram">已記載的量化或粗算 · 系統 RAM</option>
+  </select>
+  <p id="legend" class="legend-live"></p>
+  <p id="empty" class="note">這個組合沒有同時具備分數與大小的模型。</p>
+  <div class="chart-wrap"><svg id="plot" width="860" height="480" role="img"></svg></div>
+  <div class="wrap">
+    <table id="plot-table">
+      <thead><tr><th>模型</th><th>包裝</th><th>橫軸</th><th>能力</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <footer>本站由 Cursor／Grok Bot 自主完成的本地模型研究。</footer>
+</main>
+<script src="data.js"></script>
+<script>
+(function () {
+  const P = window.PLOT;
+  const ySel = document.getElementById("y");
+  const xSel = document.getElementById("x");
+  const groups = [];
+  P.series.forEach(s => {
+    let g = groups.find(x => x.name === s.group);
+    if (!g) { g = { name: s.group, items: [] }; groups.push(g); }
+    g.items.push(s);
+  });
+  groups.forEach(g => {
+    const og = document.createElement("optgroup");
+    og.label = g.name;
+    g.items.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = s.name;
+      og.appendChild(o);
+    });
+    ySel.appendChild(og);
+  });
+  const params = new URLSearchParams(location.search);
+  if (params.get("y")) ySel.value = params.get("y");
+  if (params.get("x")) xSel.value = params.get("x");
+
+  const sw = {
+    b32: ["#b7e4c7", "≤32　顯卡"],
+    b96: ["#a9c7f5", "≤96　顯卡"],
+    spill: ["#f4b4b4", ">96　會溢到系統記憶體"],
+    b128: ["#ffe08a", "≤128　系統記憶體"],
+    b192: ["#f6c48a", "≤192　系統記憶體"],
+    bover: ["#f4b4b4", ">192　放不下"]
+  };
+  const fill = { b32: "#2f7d4a", b96: "#1d5aa6", spill: "#b64040", b128: "#c47b00", b192: "#8a4b08", bover: "#b64040" };
+  const rowBg = { b32: "#b7e4c7", b96: "#a9c7f5", spill: "#f4b4b4", b128: "#ffe08a", b192: "#f6c48a", bover: "#f4b4b4" };
+
+  function band(n, ram) {
+    if (!ram) {
+      if (n <= 32) return "b32";
+      if (n <= 96) return "b96";
+      return "spill";
+    }
+    if (n <= 128) return "b128";
+    if (n <= 192) return "b192";
+    return "bover";
+  }
+
+  function legend(ram) {
+    const keys = ram ? ["b128", "b192", "bover"] : ["b32", "b96", "spill"];
+    const host = document.getElementById("legend");
+    host.textContent = "";
+    keys.forEach(k => {
+      const s = document.createElement("span");
+      s.className = "swatch";
+      s.style.background = sw[k][0];
+      s.textContent = sw[k][1];
+      host.appendChild(s);
+    });
+    const note = document.createElement("span");
+    note.className = "note";
+    note.textContent = ram
+      ? " 橫軸是系統 RAM 需求。切點 128、192。"
+      : " 橫軸是顯卡 VRAM 需求。切點 32、96。大於 96 的權重放不進文件裡的獨立顯卡。";
+    host.appendChild(note);
+  }
+
+  function collect() {
+    const mode = xSel.value;
+    const ram = mode.endsWith("-ram");
+    const extra = mode.startsWith("extra");
+    const series = P.series.find(s => s.id === ySel.value);
+    const packs = extra ? P.extras : P.files;
+    const by = new Map();
+    packs.forEach(p => {
+      if (!by.has(p.slug)) by.set(p.slug, []);
+      by.get(p.slug).push(p);
+    });
+    const pts = [];
+    (series ? series.rows : []).forEach(r => {
+      (by.get(r.slug) || []).forEach(p => {
+        if (typeof p.gib !== "number" || typeof r.y !== "number") return;
+        pts.push({
+          title: r.title,
+          slug: r.slug,
+          pack: p.pack,
+          x: p.gib,
+          unit: p.unit,
+          y: r.y,
+          raw: r.raw,
+          band: band(p.gib, ram)
+        });
+      });
+    });
+    return { pts, ram, lower: !!(series && series.lower), yName: series ? series.name : "" };
+  }
+
+  function draw() {
+    const { pts, ram, lower, yName } = collect();
+    legend(ram);
+    const svg = document.getElementById("plot");
+    const empty = document.getElementById("empty");
+    const body = document.querySelector("#plot-table tbody");
+    body.textContent = "";
+    svg.textContent = "";
+    empty.style.display = pts.length ? "none" : "block";
+    const ns = "http://www.w3.org/2000/svg";
+    function el(name, attrs) {
+      const n = document.createElementNS(ns, name);
+      Object.keys(attrs).forEach(k => n.setAttribute(k, attrs[k]));
+      return n;
+    }
+    const W = 860, H = 480, L = 64, R = 18, T = 16, B = 52;
+    const iw = W - L - R, ih = H - T - B;
+    svg.appendChild(el("rect", { x: 0, y: 0, width: W, height: H, fill: "#fff" }));
+    if (!pts.length) {
+      svg.appendChild(el("text", { x: L, y: T + 24, fill: "#5e584e", "font-size": 14 })).textContent = "沒有可畫的點";
+      return;
+    }
+    const xs = pts.map(p => p.x);
+    const ys = pts.map(p => p.y);
+    let xmin = Math.min.apply(null, xs);
+    let xmax = Math.max.apply(null, xs);
+    let ymin = Math.min.apply(null, ys);
+    let ymax = Math.max.apply(null, ys);
+    if (xmin === xmax) { xmin *= 0.8; xmax *= 1.2; }
+    if (ymin === ymax) { ymin -= 1; ymax += 1; }
+    const yPad = (ymax - ymin) * 0.08;
+    ymin -= yPad; ymax += yPad;
+    const log = v => Math.log10(v);
+    const xAt = v => L + (log(v) - log(xmin)) / (log(xmax) - log(xmin)) * iw;
+    const yAt = v => T + (1 - (v - ymin) / (ymax - ymin)) * ih;
+    [32, 96, 128, 192].forEach(g => {
+      if (g <= xmin || g >= xmax) return;
+      const x = xAt(g);
+      svg.appendChild(el("line", { x1: x, y1: T, x2: x, y2: T + ih, stroke: "#e3dbd0", "stroke-dasharray": "3 4" }));
+    });
+    svg.appendChild(el("line", { x1: L, y1: T + ih, x2: L + iw, y2: T + ih, stroke: "#1c1915" }));
+    svg.appendChild(el("line", { x1: L, y1: T, x2: L, y2: T + ih, stroke: "#1c1915" }));
+    const xLabel = (ram ? "系統 RAM（GiB，對數）" : "顯卡 VRAM（GiB，對數）");
+    svg.appendChild(el("text", { x: L + iw / 2, y: H - 14, "text-anchor": "middle", fill: "#1c1915", "font-size": 13 })).textContent = xLabel;
+    const yLabel = yName + (lower ? "（低分較好）" : "");
+    const yl = el("text", { x: 16, y: T + ih / 2, fill: "#1c1915", "font-size": 13, "text-anchor": "middle", transform: "rotate(-90 16 " + (T + ih / 2) + ")" });
+    yl.textContent = yLabel.length > 42 ? yLabel.slice(0, 40) + "…" : yLabel;
+    svg.appendChild(yl);
+    pts.forEach(p => {
+      const c = el("circle", {
+        cx: xAt(p.x), cy: yAt(p.y), r: 6,
+        fill: fill[p.band], stroke: "#1c1915", "stroke-width": 0.6
+      });
+      const title = document.createElementNS(ns, "title");
+      title.textContent = p.title + " · " + p.pack + " · " + p.x + " " + p.unit + " · " + p.raw;
+      c.appendChild(title);
+      svg.appendChild(c);
+    });
+    pts.slice().sort((a, b) => a.x - b.x || a.title.localeCompare(b.title, "zh-Hant")).forEach(p => {
+      const tr = document.createElement("tr");
+      tr.style.background = rowBg[p.band];
+      [p.title, p.pack, p.x + " " + p.unit, p.raw].forEach((cell, i) => {
+        const td = document.createElement("td");
+        if (i === 0) {
+          const a = document.createElement("a");
+          a.href = "../models/" + p.slug + ".md";
+          a.textContent = cell;
+          td.appendChild(a);
+        } else td.textContent = cell;
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  }
+  ySel.addEventListener("change", draw);
+  xSel.addEventListener("change", draw);
+  draw();
+})();
+</script>
+</body>
+</html>

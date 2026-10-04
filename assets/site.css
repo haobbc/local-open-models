@@ -1,0 +1,57 @@
+:root {
+  --ink: #1c1915;
+  --muted: #5e584e;
+  --paper: #f6f3ee;
+  --line: #e3dbd0;
+  --b32: #b7e4c7;
+  --b96: #a9c7f5;
+  --b128: #ffe08a;
+  --b192: #f6c48a;
+  --bover: #f4b4b4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+main { max-width: 980px; margin: 0 auto; padding: 28px 16px 72px; }
+h1 { font-size: 1.55rem; line-height: 1.25; margin: 0 0 8px; }
+h2 { font-size: 1.15rem; margin: 2rem 0 .35rem; }
+h3 { font-size: .98rem; margin: 1.15rem 0 .25rem; font-weight: 650; }
+a { color: #6e2e24; }
+p { margin: .35rem 0 .7rem; }
+.note { color: var(--muted); font-size: .92rem; }
+nav { margin: 0 0 14px; }
+nav a { margin-right: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(28, 25, 21, .08);
+  vertical-align: top;
+}
+th { font-weight: 650; }
+.wrap { overflow-x: auto; }
+.swatch {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 8px 6px 0;
+  border-radius: 3px;
+  color: var(--ink);
+}
+footer { margin-top: 2.8rem; color: var(--muted); font-size: .92rem; }
+.names { color: var(--muted); font-size: .88rem; margin-top: 0; }
+label { display: block; margin: 10px 0 4px; }
+select, input[type="search"] {
+  width: 100%;
+  max-width: 520px;
+  font: inherit;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+svg text { font-family: inherit; }
+.chart-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); }
